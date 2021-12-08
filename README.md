@@ -1,4 +1,4 @@
-# XX-CLI &middot; ![GitHub](https://img.shields.io/github/license/xx1115/cli) ![codecov](https://codecov.io/gh/xx1115/cli/branch/main/graph/badge.svg?token=SY0FKTCUBZ)
+# XX-CLI &middot; ![GitHub](https://img.shields.io/github/license/xx1115/cli) ![codecov](https://codecov.io/gh/xx1115/cli/branch/main/graph/badge.svg?token=SY0FKTCUBZ) [![CI](https://github.com/xx1115/cli/actions/workflows/main.yml/badge.svg)](https://github.com/xx1115/cli/actions/workflows/main.yml) [![pulish](https://github.com/xx1115/cli/actions/workflows/publish.yml/badge.svg?branch=release%2F0.0.1)](https://github.com/xx1115/cli/actions/workflows/publish.yml)
 
 `xx-cli` is a scaffolding solution that includes project initialization, Git integration, ONE-click deployment of OSS and CDN.
 
