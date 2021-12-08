@@ -11,7 +11,7 @@ import { Logger } from 'npmlog';
 import { join } from 'path';
 import { Repo, RepoUserProps } from '..';
 import { REPO_OWNER_USER } from '../..';
-import { copyFileSync } from 'fs';
+import { copyFileSync, statSync } from 'fs';
 
 export interface GithubServerProps {
   token: string;
@@ -92,10 +92,27 @@ export class GithubServer implements Repo {
 
   moveFiles(from: string, to: string) {
     ensureDirSync(to);
-    const files = glob.sync('**', { cwd: from, nodir: true });
-    files.forEach((file) => {
-      copyFileSync(join(from, file), join(to, file));
+    const files = glob.sync('**', {
+      cwd: from,
+      dot: true,
+      // nodir: true,
+      ignore: ['**/node_modules/**', '.git/**'],
     });
+    files
+      .filter((file) => {
+        return statSync(join(from, file)).isDirectory();
+      })
+      .forEach((file) => {
+        const p = join(to, file);
+        ensureDirSync(p);
+      });
+    files
+      .filter((file) => {
+        return statSync(join(from, file)).isFile();
+      })
+      .forEach((file) => {
+        copyFileSync(join(from, file), join(to, file));
+      });
     emptyDirSync(from);
   }
 
@@ -146,8 +163,10 @@ export class GithubServer implements Repo {
   }
 
   getRepo(login: string, name: string) {
-    return this.get(`/repos/${login}/${name}`).catch((_err) => {
-      // this.log.logVerbose('', _err);
+    return this.get(`/repos/${login}/${name}`, {
+      Accept: 'application/vnd.github.v3+json',
+    }).catch((_err) => {
+      this.log.verbose('', _err);
       this.log.info('getRepo', `${login}/${name}仓库不存在`);
       return null;
     });

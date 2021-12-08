@@ -40,7 +40,11 @@ export interface Repo {
   moveFiles: (from: string, to: string) => void;
 
   // 将远端的git项目clone到本地
-  cloneToLocal: (git: SimpleGit, belongTo: string, repoName: string) => void;
+  cloneToLocal: (
+    git: SimpleGit,
+    belongTo: string,
+    repoName: string,
+  ) => Promise<unknown>;
 
   // 设置token信息
   setToken: (token: string) => void;

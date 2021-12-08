@@ -126,6 +126,10 @@ export class CommitCommand extends Command<CommitCommandParam> {
     this.log.verbose('prepare', '读取到项目配置信息为', this.RepoInfo);
     if (await this.needSetConfig()) {
       await this.configRepo();
+    } else {
+      const config = this.getRepoConfig();
+      // TODO: add GiteeServer
+      this.gitServer = new GithubServer(config.token, this.log);
     }
   }
 
@@ -182,7 +186,7 @@ export class CommitCommand extends Command<CommitCommandParam> {
         `${gitServer} => ${this.configPath}`,
       );
     }
-    // TODO: add GiteeServer
+    // TODO:
     this.gitServer = new GithubServer('', this.log);
   }
 
@@ -207,6 +211,7 @@ export class CommitCommand extends Command<CommitCommandParam> {
       ).token;
       this.updateRepoConfig(this.repoName, 'token', token);
       this.log.success('token写入成功', `${token} -> ${this.configPath}`);
+      this.gitServer?.setToken(token);
     }
   }
 
@@ -638,6 +643,6 @@ export const commitExec = async (...params: [CommitCommandParam, any[]]) => {
     await command.do();
   } catch (e) {
     log.error('commitExec', (e as Error).message);
-    console.log(e);
+    process.env.CONSOLE_ERROR && console.log(e);
   }
 };
