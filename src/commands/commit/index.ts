@@ -4,7 +4,6 @@ import { existsSync } from 'fs';
 import { basename, join } from 'path';
 import {
   ensureFile,
-  pathExists,
   pathExistsSync,
   readJson,
   readJsonSync,
@@ -36,11 +35,10 @@ export enum RepoEnum {
 }
 
 export interface RepoConfig {
-  server: RepoEnum;
   token: string;
   ownerType: string;
   belongTo: string;
-  [name: string]: any;
+  server: string;
 }
 
 export interface CommitConfig {
@@ -262,30 +260,7 @@ export class CommitCommand extends Command<CommitCommandParam> {
 
   async checkConfigComplete() {
     const config = this.getRepoConfig();
-    return config.owner && config.server && config.token;
-  }
-
-  /**
-   * TBD
-   * @deprecated
-   * @returns
-   */
-  async checkLocalAndRemoteAssociated() {
-    if (await pathExists(join(this.cwd, '.git'))) {
-      this.log.info('git本地已初始化完成', '');
-      const remotes = await this.git.getRemotes();
-      if (remotes.find((item) => item.name === 'origin')) {
-        this.log.info('本地与远端已创建关联', '');
-        return true;
-      } else {
-        this.log.info('本地与远端未创建关联，执行关联部分逻辑', '');
-        return false;
-      }
-    } else {
-      this.log.info('git本地未进行初始化，执行初始化和远端关联逻辑', '');
-      await this.git.init();
-      return false;
-    }
+    return config.belongTo && config.server && config.token;
   }
 
   getRepoConfig(): RepoConfig {
@@ -317,7 +292,7 @@ export class CommitCommand extends Command<CommitCommandParam> {
   }
 
   async loadRepoInfo() {
-    this.RepoInfo = await readJson(this.configPath);
+    this.RepoInfo = (await readJson(this.configPath)) as CommitConfig;
   }
 
   private async ensurePkgVersion() {
