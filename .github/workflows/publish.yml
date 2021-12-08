@@ -2,7 +2,7 @@ name: pulish
 
 on:
   push:
-    tags: [**]
+    tags: [*]
 
 jobs:
   build:

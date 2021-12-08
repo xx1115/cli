@@ -492,6 +492,7 @@ export class CommitCommand extends Command<CommitCommandParam> {
     ).ctu;
     if (ctu) {
       this.log.info('exec', chalk.red('您选择了继续执行'));
+      return ctu;
     }
   }
 
