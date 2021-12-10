@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-empty-function */
 import { program } from 'commander';
 import { XXCli } from '@/cli/cli';
 

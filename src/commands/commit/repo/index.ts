@@ -39,9 +39,12 @@ export interface Repo {
   // 移动文件
   moveFiles: (from: string, to: string) => void;
 
+  // 删除远程仓库
+  rmRepo: (belongTo: string, repoName: string) => void;
+
   // 将远端的git项目clone到本地
   cloneToLocal: (
-    git: SimpleGit,
+    pwd: string,
     belongTo: string,
     repoName: string,
   ) => Promise<unknown>;
