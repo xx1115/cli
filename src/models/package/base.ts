@@ -1,6 +1,10 @@
 import { Loggable } from '@/utils';
-import { pathExistsSync, readJsonSync } from 'fs-extra';
-import { join } from 'path';
+import fs, { pathExistsSync, readJsonSync } from 'fs-extra';
+import { join, resolve } from 'path';
+import { manifest } from 'pacote';
+import { log } from '@/utils/log';
+import path from 'path';
+import ejs from 'ejs';
 import execa from 'execa';
 
 export interface PackageProps {
@@ -75,5 +79,61 @@ export class Package extends Loggable implements PackageInterface {
       this.logVerbose('命令执行成功', String(e));
       process.exit(e);
     });
+  }
+
+  async loadLocalPkgInfo() {
+    let dir = resolve(this.storageDir, 'package.json');
+    return fs.readFileSync(dir, 'utf-8');
+  }
+
+  loadPkgInfo(queryPath: string) {
+    return manifest(queryPath);
+  }
+
+  async loadConfig () {
+    try {
+      return await fs.readJson(resolve(await this.getSourceDir(), 'xx.config.json'))
+    } catch(err) {
+      return {}
+    }
+  }
+
+  renderEjs(targetDir: string, projectInfo: any, options: any) {
+    return new Promise((resolve, reject) => {
+      require('glob')(
+        '**',
+        {
+          cwd: targetDir,
+          ignore: options.ignore || ['node_modules/**'],
+          nodir: true,
+        },
+        (err: string, files: any) => {
+          if (err) reject(err);
+          Promise.all(
+            files.map((file: string) => {
+              const filePath = path.resolve(targetDir, file);
+              return new Promise<void>((resolve, reject) => {
+                ejs.renderFile(filePath, projectInfo, {}, (err, result) => {
+                  if (err) reject(err);
+                  fs.writeFileSync(filePath, result);
+                  resolve();
+                });
+              });
+            }),
+          )
+            .then(resolve)
+            .catch(reject);
+        },
+      );
+    });
+  }
+
+  async copy(targetDir: string) {
+    try {
+      fs.copySync(await this.getSourceDir(), targetDir);
+      log.info('写入模板成功!', '');
+    } catch (err) {
+      throw new Error(`写入模板失败: ${err}`);
+    }
   }
 }

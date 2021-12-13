@@ -1,7 +1,7 @@
 import { join } from 'path';
 import execa from 'execa';
 import { Package, PackageProps } from '.';
-import { manifest, extract } from 'pacote';
+import { extract } from 'pacote';
 import { pathExistsSync } from 'fs-extra';
 
 export enum RemoteType {
@@ -36,7 +36,7 @@ export class RemotePackage extends Package {
     if (this.finalPkgPath !== '') return this.finalPkgPath;
 
     if (this.remoteType === RemoteType.NPM_PACKAGE) {
-      const pkgInfo = await this.loadPkgInfo();
+      const pkgInfo = await this.loadPkgInfo(this.queryPath);
       this.finalPkgPath = `${this.name}@${pkgInfo.version}`;
       return this.finalPkgPath;
     }
@@ -59,10 +59,6 @@ export class RemotePackage extends Package {
   async exists() {
     const sourceDir = await this.getSourceDir();
     return pathExistsSync(sourceDir);
-  }
-
-  loadPkgInfo() {
-    return manifest(this.queryPath);
   }
 
   async download() {

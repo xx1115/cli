@@ -7,7 +7,7 @@ import rootCheck from 'root-check';
 import pathExists from 'path-exists';
 import { events, Loggable } from '@/utils';
 import { CLI_DEFAULT_HOME, CLI_ENV_FILE_NAME } from '@/models';
-import { initExec, createExec, publishExec } from '@/commands';
+import { createExec, publishExec } from '@/commands';
 import dotEnv from 'dotenv';
 import { RemoteCommand, execute } from './exec';
 import { commitExec } from '@/commands/commit';
@@ -57,14 +57,18 @@ export class XXCli extends Loggable {
       .version(pkg.version);
 
     program
-      .command('init')
+      .command('init <project-name>')
       .option('-f, --force', 'Whether to force initialization', false)
+      // .option('-t <template-name>, --template', 'Remote Template Name')
+      // .option('-tp <template-dir>, --template-position', 'Local Template Name')
       .description('Initialize a project')
-      .action(initExec);
+      // .action(initExec);
 
     program
-      .command('create')
+      .command('create <project-name> [template-name]')
       .option('-f, --force', 'Whether to force initialization', false)
+      .option('-tp <temopate-dir>, --template-position <temopate-dir>', 'Local Template Name')
+      .option('--offline', 'Template In The Local Cache', false)
       .description('Create a project')
       .action(createExec);
 
