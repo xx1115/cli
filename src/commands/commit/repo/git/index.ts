@@ -171,7 +171,7 @@ export class GithubServer implements Repo {
   }
 
   getRemote(owner: string, repo: string) {
-    return `git@github.com:${owner}/${repo}.git`;
+    return `https://github.com/${owner}/${repo}.git`;
   }
 
   getTokenHelpUrl() {
