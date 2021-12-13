@@ -53,7 +53,7 @@ describe.only('测试GithubServer类', () => {
   it('getRemote', () => {
     const server = new GithubServer(token, log);
     const remoteAddr = server.getRemote('uuuhdstest', 't1');
-    expect(remoteAddr).toBe('git@github.com:uuuhdstest/t1.git');
+    expect(remoteAddr).toBe('https://github.com/uuuhdstest/t1.git');
   });
 
   it(
