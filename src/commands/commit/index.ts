@@ -91,7 +91,7 @@ const VERSION_TYPES = (version: string) => {
 const VERSION_RELEASE = 'release';
 const VERSION_DEVELOP = 'develop';
 
-export class CommitCommand extends Command<CommitCommandParam> {
+export class CommitCommand extends Command<Partial<CommitCommandParam>> {
   branch = '';
   version = '';
   cwd: string;
@@ -106,7 +106,7 @@ export class CommitCommand extends Command<CommitCommandParam> {
   user?: GitUserProps;
   orgs: GitOrgProps[] = [];
 
-  constructor(props: CommitCommandParam, log: Logger) {
+  constructor(props: Partial<CommitCommandParam>, log: Logger) {
     super(props, log);
     this.version = '';
     this.cwd = process.cwd();
@@ -300,7 +300,7 @@ export class CommitCommand extends Command<CommitCommandParam> {
     this.RepoInfo = (await readJson(this.configPath)) as CommitConfig;
   }
 
-  private async ensurePkgVersion() {
+  async ensurePkgVersion() {
     if (existsSync(this.defaultCfg)) {
       this.version = (await readJsonSync(this.defaultCfg)).version;
     } else if (existsSync(this.secondCfg)) {
@@ -345,7 +345,7 @@ export class CommitCommand extends Command<CommitCommandParam> {
         )} to ${this.cwd}`,
       );
       await this.gitServer?.cloneToLocal(
-        this.git,
+        this.cwd,
         config.belongTo,
         this.repoName,
       );
