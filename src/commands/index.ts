@@ -1,3 +1,3 @@
 export * from './init';
-export * from './commit';
+export * from './git';
 export * from './publish';

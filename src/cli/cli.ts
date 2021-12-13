@@ -2,7 +2,7 @@ import { homedir } from 'os';
 import { env } from 'process';
 import { resolve, join } from 'path';
 import { writeFileSync } from 'fs';
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import rootCheck from 'root-check';
 import pathExists from 'path-exists';
 import { events, Loggable } from '@/utils';
@@ -10,7 +10,7 @@ import { CLI_DEFAULT_HOME, CLI_ENV_FILE_NAME } from '@/models';
 import { initExec, createExec, publishExec } from '@/commands';
 import dotEnv from 'dotenv';
 import { RemoteCommand, execute } from './exec';
-import { commitExec } from '@/commands/commit';
+import { commitExec, gitInitExec } from '@/commands/git';
 
 export interface PkgInterface {
   version: string;
@@ -68,14 +68,25 @@ export class XXCli extends Loggable {
       .description('Create a project')
       .action(createExec);
 
-    program
-      .command('commit')
+    const gitCommand = new Command('git');
+    gitCommand.option('-t, --test', 'test git config valid', false);
+
+    const gitInitCommand = new Command('init');
+    const commitCommand = new Command('commit');
+
+    gitInitCommand
       .option('-rs, --resetServer', 'reset git server', false)
       .option('-rt, --resetToken', 'reset git token', false)
       .option('-rO, --resetOwner', 'reset owner info', false)
       .option('-p, --production', 'add release and publish', false)
-      .description('handle git flow')
-      .action(commitExec);
+      .description('init git config')
+      .action(gitInitExec);
+
+    commitCommand.description('按规定的方式提交代码').action(commitExec);
+
+    gitCommand.addCommand(gitInitCommand);
+    gitCommand.addCommand(commitCommand);
+    program.addCommand(gitCommand);
 
     program
       .command('publish')

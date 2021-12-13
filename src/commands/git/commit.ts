@@ -22,7 +22,7 @@ import semver, { ReleaseType } from 'semver';
 import terminalLink from 'terminal-link';
 import chalk from 'chalk';
 
-interface CommitCommandParam {
+export interface CommitCommandParam {
   resetServer: boolean;
   resetToken: boolean;
   resetOwner: boolean;
@@ -91,7 +91,7 @@ const VERSION_TYPES = (version: string) => {
 const VERSION_RELEASE = 'release';
 const VERSION_DEVELOP = 'develop';
 
-export class CommitCommand extends Command<CommitCommandParam> {
+export class CommitCommand extends Command<Partial<CommitCommandParam>> {
   branch = '';
   version = '';
   cwd: string;
@@ -106,7 +106,7 @@ export class CommitCommand extends Command<CommitCommandParam> {
   user?: GitUserProps;
   orgs: GitOrgProps[] = [];
 
-  constructor(props: CommitCommandParam, log: Logger) {
+  constructor(props: Partial<CommitCommandParam>, log: Logger) {
     super(props, log);
     this.version = '';
     this.cwd = process.cwd();
@@ -300,7 +300,7 @@ export class CommitCommand extends Command<CommitCommandParam> {
     this.RepoInfo = (await readJson(this.configPath)) as CommitConfig;
   }
 
-  private async ensurePkgVersion() {
+  async ensurePkgVersion() {
     if (existsSync(this.defaultCfg)) {
       this.version = (await readJsonSync(this.defaultCfg)).version;
     } else if (existsSync(this.secondCfg)) {
@@ -345,7 +345,7 @@ export class CommitCommand extends Command<CommitCommandParam> {
         )} to ${this.cwd}`,
       );
       await this.gitServer?.cloneToLocal(
-        this.git,
+        this.cwd,
         config.belongTo,
         this.repoName,
       );
@@ -635,14 +635,3 @@ export class CommitCommand extends Command<CommitCommandParam> {
     );
   }
 }
-
-export const commitExec = async (...params: [CommitCommandParam, any[]]) => {
-  try {
-    const [options] = params;
-    const command = new CommitCommand(options, log);
-    await command.do();
-  } catch (e) {
-    log.error('commitExec', (e as Error).message);
-    process.env.CONSOLE_ERROR && console.log(e);
-  }
-};

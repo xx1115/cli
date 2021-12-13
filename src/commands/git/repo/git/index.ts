@@ -1,4 +1,4 @@
-import { SimpleGit } from 'simple-git';
+import simpleGit, { SimpleGit } from 'simple-git';
 import { doSpinner } from '@/utils/spinner';
 import axios, {
   AxiosInstance,
@@ -10,8 +10,8 @@ import glob from 'glob';
 import { Logger } from 'npmlog';
 import { join } from 'path';
 import { Repo, RepoUserProps } from '..';
-import { REPO_OWNER_USER } from '../..';
 import { copyFileSync, statSync } from 'fs';
+import { REPO_OWNER_USER } from '../../commit';
 
 export interface GithubServerProps {
   token: string;
@@ -48,34 +48,31 @@ export class GithubServer implements Repo {
         return Promise.reject(error);
       },
     );
+    log.verbose('GithubServer', '初始化完成');
+  }
+
+  async rmRepo(owner: string, repo: string) {
+    if (await this.getRepo(owner, repo)) {
+      await this.delete(`/repos/${owner}/${repo}`);
+    }
   }
 
   setToken(token: string) {
     this.token = token;
   }
 
-  put<T, R>(url: string, data?: T, headers?: AxiosRequestHeaders) {
-    return this.client.put<T, R>(url, data, {
-      headers,
-    });
-  }
-
-  async ensureRemoteRepo(
-    belongTo: string,
-    repoName: string,
-    ownerType: string,
-  ) {
-    let repo = await this.getRepo(belongTo, repoName);
+  async ensureRemoteRepo(owner: string, repoName: string, ownerType: string) {
+    let repo = await this.getRepo(owner, repoName);
     if (!repo) {
       await doSpinner('开始创建远程仓库...', async () => {
         if (ownerType === REPO_OWNER_USER) {
           repo = await this.createRepo(repoName);
         } else {
-          repo = await this.createOrgRepo(repoName, belongTo);
+          repo = await this.createOrgRepo(repoName, owner);
         }
       });
       if (repo) {
-        await this.createReadme(belongTo, repoName);
+        await this.createReadme(owner, repoName);
         this.log.verbose('repo', String(repo));
         this.log.success('远程仓库创建成功');
       } else {
@@ -86,8 +83,9 @@ export class GithubServer implements Repo {
     }
   }
 
-  async cloneToLocal(git: SimpleGit, belongTo: string, repoName: string) {
-    return git.clone(this.getRemote(belongTo, repoName) as string, '.');
+  async cloneToLocal(tmpDir: string, owner: string, repoName: string) {
+    const git: SimpleGit = simpleGit(tmpDir);
+    return git.clone(this.getRemote(owner, repoName) as string, tmpDir);
   }
 
   moveFiles(from: string, to: string) {
@@ -116,11 +114,11 @@ export class GithubServer implements Repo {
     emptyDirSync(from);
   }
 
-  createReadme(belongTo: string, repoName: string) {
+  createReadme(owner: string, repoName: string) {
     return this.put(
-      `/repos/${belongTo}/${repoName}/contents/README.md`,
+      `/repos/${owner}/${repoName}/contents/README.md`,
       {
-        owner: belongTo,
+        owner: owner,
         repo: repoName,
         path: 'README.md',
         message: 'doc: add README.md file',
@@ -142,9 +140,9 @@ export class GithubServer implements Repo {
     );
   }
 
-  createOrgRepo(name: string, login: string) {
+  createOrgRepo(name: string, owner: string) {
     return this.post(
-      `/orgs/${login}/repos`,
+      `/orgs/${owner}/repos`,
       {
         name,
       },
@@ -172,8 +170,8 @@ export class GithubServer implements Repo {
     });
   }
 
-  getRemote(belongTo: string, repo: string) {
-    return `git@github.com:${belongTo}/${repo}.git`;
+  getRemote(owner: string, repo: string) {
+    return `https://github.com/${owner}/${repo}.git`;
   }
 
   getTokenHelpUrl() {
@@ -189,6 +187,18 @@ export class GithubServer implements Repo {
 
   post<T, R>(url: string, data?: T, headers?: AxiosRequestHeaders) {
     return this.client.post<T, R>(url, data, {
+      headers,
+    });
+  }
+
+  put<T, R>(url: string, data?: T, headers?: AxiosRequestHeaders) {
+    return this.client.put<T, R>(url, data, {
+      headers,
+    });
+  }
+
+  delete<T, R>(url: string, headers?: AxiosRequestHeaders) {
+    return this.client.delete<T, R>(url, {
       headers,
     });
   }
