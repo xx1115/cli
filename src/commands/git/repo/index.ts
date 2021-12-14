@@ -1,5 +1,4 @@
 import { AxiosInstance, AxiosRequestHeaders } from 'axios';
-import { SimpleGit } from 'simple-git';
 
 export interface RepoUserProps {
   login: string;

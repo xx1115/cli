@@ -11,7 +11,7 @@ import { Logger } from 'npmlog';
 import { join } from 'path';
 import { Repo, RepoUserProps } from '..';
 import { copyFileSync, statSync } from 'fs';
-import { REPO_OWNER_USER } from '../../commit';
+import { REPO_OWNER_USER } from '../../init';
 
 export interface GithubServerProps {
   token: string;

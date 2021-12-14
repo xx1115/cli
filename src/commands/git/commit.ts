@@ -1,71 +1,18 @@
-import { GithubServer } from './repo/git/index';
-import os from 'os';
-import { existsSync } from 'fs';
-import { basename, join } from 'path';
-import {
-  ensureFile,
-  pathExistsSync,
-  readJson,
-  readJsonSync,
-  writeJson,
-  writeJsonSync,
-} from 'fs-extra';
-import { v4 as uuidv4 } from 'uuid';
+import { basename } from 'path';
+import { readJsonSync, writeJsonSync } from 'fs-extra';
 import inquirer from 'inquirer';
 import simpleGit, { Options, SimpleGit, TaskOptions } from 'simple-git';
-import { Command } from '@/models';
-import { Repo } from './repo';
 import { asyncGenerator } from '@/utils/async';
 import { Logger } from 'npmlog';
 import { log } from '@/utils/log';
 import semver, { ReleaseType } from 'semver';
-import terminalLink from 'terminal-link';
 import chalk from 'chalk';
+import { GitInitCommand } from './init';
+import { GitBaseCommand } from './base';
 
 export interface CommitCommandParam {
-  resetServer: boolean;
-  resetToken: boolean;
-  resetOwner: boolean;
   production: boolean;
 }
-
-export enum RepoEnum {
-  GITHUB = 'GITHUB',
-  GITEE = 'GITEE',
-}
-
-export interface RepoConfig {
-  token: string;
-  ownerType: string;
-  belongTo: string;
-  server: string;
-}
-
-export interface CommitConfig {
-  [name: string]: RepoConfig;
-}
-
-export interface GitUserProps {
-  login: string;
-}
-
-export interface GitOrgProps {
-  login: string;
-}
-
-export const REPO_OWNER_USER = 'REPO_OWNER_USER';
-export const REPO_OWNER_ORG = 'REPO_OWNER_ORG';
-
-const GIT_OWNER_TYPE = [
-  {
-    name: '个人',
-    value: REPO_OWNER_USER,
-  },
-  {
-    name: '组织',
-    value: REPO_OWNER_ORG,
-  },
-];
 
 const COMMIT_TYPES = [
   { name: 'feat：新功能（feature)', value: 'feat' },
@@ -91,272 +38,38 @@ const VERSION_TYPES = (version: string) => {
 const VERSION_RELEASE = 'release';
 const VERSION_DEVELOP = 'develop';
 
-export class CommitCommand extends Command<Partial<CommitCommandParam>> {
+export class CommitCommand extends GitBaseCommand<Partial<CommitCommandParam>> {
   branch = '';
-  version = '';
-  cwd: string;
-  private defaultCfg: string;
-  private secondCfg: string;
-  configPath: string;
   git: SimpleGit;
   repoName: string;
-  finalConfig: string;
-  RepoInfo: CommitConfig = {};
-  gitServer?: Repo;
-  user?: GitUserProps;
-  orgs: GitOrgProps[] = [];
 
   constructor(props: Partial<CommitCommandParam>, log: Logger) {
     super(props, log);
     this.version = '';
-    this.cwd = process.cwd();
-    this.defaultCfg = join(this.cwd, 'xx.json');
-    this.secondCfg = join(this.cwd, 'package.json');
-    this.configPath = '';
     this.git = simpleGit(this.cwd);
     this.repoName = basename(this.cwd);
-    this.finalConfig = this.defaultCfg;
-    this.RepoInfo = {};
   }
 
   protected async prepare() {
-    await this.ensurePkgVersion();
-    await this.ensureRepoConfig();
+    if (!(await new GitInitCommand({}, this.log).isValid())) {
+      throw new Error(
+        `请先执行${chalk.redBright('xx git init')}来初始化配置信息`,
+      );
+    }
+    await this.loadPkgVersion();
     await this.loadRepoInfo();
-    this.log.verbose('prepare', '读取到项目配置信息为', this.RepoInfo);
-    if (await this.needSetConfig()) {
-      await this.configRepo();
-    } else {
-      const config = this.getRepoConfig();
-      // TODO: add GiteeServer
-      this.gitServer = new GithubServer(config.token, this.log);
-    }
-  }
-
-  async configRepo() {
-    await this.configServer();
-    await this.configToken();
-    await this.getUserAndOrg();
-    await this.configOwner();
-  }
-
-  async getUserAndOrg() {
+    this.log.verbose('prepare', '读取到项目配置信息为', this.repoInfo);
     const config = this.getRepoConfig();
-    if (config.server === RepoEnum.GITHUB) {
-      this.gitServer?.setToken(config.token);
-    } else if (config.server === RepoEnum.GITEE) {
-      // TODO:
-    } else {
-      throw new Error('目前还不支持这种远程仓库');
-    }
-    const user = await this.gitServer?.getUser();
-    if (!user) throw new Error('用户信息获取失败，请检查token信息');
-    const orgs = await this.gitServer?.getOrg();
-    if (!orgs) throw new Error('组织信息获取失败，请检查token信息');
-    this.log.success(config.server, '用户和组织信息获取成功');
-    this.user = user;
-    this.orgs = orgs;
+    this.initialGitServer(config);
   }
 
-  async configServer() {
-    const config = this.getRepoConfig();
-    this.log.verbose('configServer', '读取到的项目配置信息为', config);
-    if (this.argv.resetServer || !config.server) {
-      const gitServer = (
-        await inquirer.prompt({
-          type: 'list',
-          name: 'gitServer',
-          message: '请选择您想要托管的Git平台',
-          default: RepoEnum.GITHUB,
-          choices: [
-            {
-              name: 'Github',
-              value: RepoEnum.GITHUB,
-            },
-            {
-              name: 'Gitee',
-              value: RepoEnum.GITEE,
-            },
-          ],
-        })
-      ).gitServer;
-      this.updateRepoConfig(this.repoName, 'server', gitServer);
-      this.log.success(
-        'git server 写入成功',
-        `${gitServer} => ${this.configPath}`,
-      );
-    }
+  async init() {
     // TODO:
-    this.gitServer = new GithubServer('', this.log);
   }
 
-  async configToken() {
-    const config = this.getRepoConfig();
-    if (this.argv.resetToken || !config.token) {
-      this.log.warn('configToken', `您需要配置token信息`);
-      this.log.info(
-        'configToken',
-        `${terminalLink(
-          '请点击参考帮助文档',
-          this.gitServer?.getTokenHelpUrl() as string,
-        )}`,
-      );
-      const token = (
-        await inquirer.prompt({
-          type: 'password',
-          name: 'token',
-          message: '请将token复制到这里',
-          default: '',
-        })
-      ).token;
-      this.updateRepoConfig(this.repoName, 'token', token);
-      this.log.success('token写入成功', `${token} -> ${this.configPath}`);
-      this.gitServer?.setToken(token);
-    }
-  }
-
-  async configOwner() {
-    const config = this.getRepoConfig();
-    if (this.argv.resetOwner || !config.ownerType || !config.belongTo) {
-      let ownerType = '';
-      let belongTo = '';
-      if (this.orgs && this.orgs.length > 0) {
-        ownerType = (
-          await inquirer.prompt({
-            type: 'list',
-            name: 'owner',
-            message: '请选择远程仓库类型',
-            default: REPO_OWNER_USER,
-            choices: GIT_OWNER_TYPE,
-          })
-        ).owner;
-      } else {
-        // 没有组织直接设置个人
-        ownerType = REPO_OWNER_USER;
-      }
-      this.updateRepoConfig(this.repoName, 'ownerType', ownerType);
-      if (ownerType === REPO_OWNER_USER) {
-        belongTo = (this.user as GitUserProps).login;
-      } else {
-        belongTo = (
-          await inquirer.prompt({
-            type: 'list',
-            name: 'belongTo',
-            message: '请选择',
-            choices: this.orgs.map((item) => ({
-              name: item.login,
-              value: item.login,
-            })),
-          })
-        ).belongTo;
-      }
-      this.updateRepoConfig(this.repoName, 'belongTo', belongTo);
-    }
-  }
-
-  async needSetConfig() {
-    return (
-      !(await this.checkConfigComplete()) ||
-      this.argv.resetOwner ||
-      this.argv.resetServer ||
-      this.argv.resetToken
-    );
-  }
-
-  async checkConfigComplete() {
-    const config = this.getRepoConfig();
-    return config.belongTo && config.server && config.token;
-  }
-
-  getRepoConfig(): RepoConfig {
-    return this.RepoInfo[this.repoName] ?? {};
-  }
-
-  getRepoConfigByKey(key: keyof RepoConfig) {
-    return this.getRepoConfig()?.[key];
-  }
-
-  updateRepoConfig(RepoName: string, key: keyof RepoConfig, value: string) {
-    const config: RepoConfig = this.getRepoConfig();
-    config[key] = value;
-    this.RepoInfo[RepoName] = config;
-    writeJsonSync(this.configPath, this.RepoInfo, { spaces: 2 });
-  }
-
-  async ensureRepoConfig() {
-    this.configPath = join(os.homedir(), '.xxRepo.json');
-    if (!existsSync(this.configPath)) {
-      await writeJson(
-        this.configPath,
-        { demo: {} },
-        {
-          spaces: 2,
-        },
-      );
-    }
-  }
-
-  async loadRepoInfo() {
-    this.RepoInfo = (await readJson(this.configPath)) as CommitConfig;
-  }
-
-  async ensurePkgVersion() {
-    if (existsSync(this.defaultCfg)) {
-      this.version = (await readJsonSync(this.defaultCfg)).version;
-    } else if (existsSync(this.secondCfg)) {
-      this.version = (await readJsonSync(this.secondCfg)).version;
-      this.finalConfig = this.secondCfg;
-    } else {
-      await this.addCommitJson();
-    }
-  }
-
-  private async addCommitJson() {
-    await ensureFile(this.finalConfig);
-    this.version = '0.0.1';
-    const cfg = { version: this.version, name: this.repoName };
-    this.log.notice('addCommitJson', 'generate config xx.json', cfg);
-    writeJsonSync(this.finalConfig, cfg, {
-      spaces: 2,
-    });
-  }
-
-  protected async init() {
-    const config = this.getRepoConfig();
-    // 创建远端仓库
-    await this.gitServer?.ensureRemoteRepo(
-      config.belongTo,
-      this.repoName,
-      config.ownerType,
-    );
-    if (!pathExistsSync(join(this.cwd, '.git'))) {
-      await this.git.init();
-    }
-    const remotes = await this.git.remote([]);
-    if (!remotes) {
-      const tmp = join(process.env.CLI_HOME_PATH as string, '.tmp', uuidv4());
-      this.log.verbose('init', 'move to tmp, path is', tmp);
-      await this.gitServer?.moveFiles(this.cwd, tmp);
-      this.log.verbose(
-        'clone',
-        `clone ${this.gitServer?.getRemote(
-          config.belongTo,
-          this.repoName,
-        )} to ${this.cwd}`,
-      );
-      await this.gitServer?.cloneToLocal(
-        this.cwd,
-        config.belongTo,
-        this.repoName,
-      );
-      log.success('clone', 'clone success!');
-      await this.gitServer?.moveFiles(tmp, this.cwd);
-      this.log.success('commit', 'finish');
-      return;
-    }
-    this.log.success('init', '本地已与远端建立关联');
-  }
-
+  /**
+   * @deprecated
+   */
   async pushMainRemote() {
     if (!(await this.checkRemoteMain())) {
       this.log.info('远端是一个新的仓库，执行创建主分支并push动作', '');
@@ -448,21 +161,64 @@ export class CommitCommand extends Command<Partial<CommitCommandParam>> {
   }
 
   protected async exec() {
-    if (await this.whetherContinue()) {
-      await this.getCorrectVersion();
-      await this.checkStash();
-      await this.checkConflicted();
-      await this.checkoutBranch(this.branch);
-      await this.pullRemoteMainAndBranch();
-      if (!(await this.initCommit())) {
-        await this.pushRemoteRepo(this.branch);
-      }
-      if (this.argv.production) {
-        await this.addAndPushTag();
-      }
+    // 提交时候可能会遇到的情况
+    // 1、当前开发分支为0.0.1，远端release分支大于等于当前分支
+    // 2、当前开发分支为0.0.2, 远端release分支小于当前分支
+    // 3、远端没有开发分支
+    // const version = await this.getCorrectVersion();
+    // this.log.notice('exec', `经过计算，当前开发版本号为${version}`);
+    // this.log.warn('exec', 'develop/*.*.*分支不允许直接push代码，请选择本次')
+
+    // TODO: 确保远端已经有develop
+    // 如果远端没有develop分支的话，从主分支拉取远端分支
+    const branch = await this.git.branchLocal();
+    if (
+      branch.current.includes('feature') ||
+      branch.current.includes('hotfix')
+    ) {
+      // TODO: 执行合并提交逻辑
+    } else {
+      const answers = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'type',
+          message: '请选择本次开发类型',
+          default: 'feat',
+          choices: [
+            {
+              name: 'feature',
+              value: 'feature',
+            },
+            {
+              name: 'hotfix',
+              value: 'hotfix',
+            },
+          ],
+        },
+        {
+          type: 'input',
+          name: 'name',
+          message: '请输入分支名称',
+        },
+      ]);
+      this.branch = `${answers.type}/${answers.name}`;
+      this.log.info('exec', `生成的开发分支为${this.branch}`);
     }
+    await this.checkStash();
+    await this.checkConflicted();
+    await this.checkoutBranch(this.branch);
+    await this.pullRemoteMainAndBranch();
+    // if (!(await this.initCommit())) {
+    //   await this.pushRemoteRepo(this.branch);
+    // }
+    // if (this.argv.production) {
+    //   await this.addAndPushTag();
+    // }
   }
 
+  /**
+   * @deprecated
+   */
   async addAndPushTag() {
     const tagName = `release/${this.version}`;
     await this.git.addTag(tagName);
@@ -473,6 +229,10 @@ export class CommitCommand extends Command<Partial<CommitCommandParam>> {
     this.log.info('addAndPushTag', `向远端推送${tagName}成功`);
   }
 
+  /**
+   * @deprecated
+   * @returns
+   */
   async whetherContinue() {
     const local = await this.git.branchLocal();
     if (local.current.startsWith('develop')) {
@@ -589,6 +349,7 @@ export class CommitCommand extends Command<Partial<CommitCommandParam>> {
       log.verbose('本地开发分支', this.branch);
       this.syncVersionToPackageJson();
     }
+    return this.version;
   }
 
   syncVersionToPackageJson() {

@@ -1,8 +1,8 @@
 import { CommitCommand, CommitCommandParam } from './commit';
-import { InitCommand } from './init';
+import { GitInitCommand } from './init';
 import { log } from '@/utils/log';
 
-export const commitExec = async (...params: [CommitCommandParam, any[]]) => {
+export const commitExec = async (...params: [CommitCommandParam]) => {
   try {
     const [options] = params;
     const command = new CommitCommand(options, log);
@@ -13,10 +13,10 @@ export const commitExec = async (...params: [CommitCommandParam, any[]]) => {
   }
 };
 
-export const gitInitExec = async (...params: [CommitCommandParam, any[]]) => {
+export const gitInitExec = async (...params: [CommitCommandParam]) => {
   try {
     const [options] = params;
-    const command = new InitCommand(options, log);
+    const command = new GitInitCommand(options, log);
     await command.do();
   } catch (e) {
     log.error('gitInitExec', (e as Error).message);
