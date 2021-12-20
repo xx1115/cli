@@ -5,11 +5,11 @@ import {
   pathExistsSync,
 } from 'fs-extra';
 import { REPO_OWNER_USER } from '@/commands';
-import { GithubServer } from '@/commands/commit/repo/git/index';
+import { GithubServer } from '@/commands/commit/repo/Github';
 import { log } from '@/utils/log';
 import os from 'os';
 import { join } from 'path';
-import { rmdirSync, rmSync, unlink } from 'fs';
+import { rmSync } from 'fs';
 
 jest.useFakeTimers('legacy');
 
@@ -22,7 +22,7 @@ jest.mock('@/utils/log', () => {
   };
 });
 
-describe.only('测试GithubServer类', () => {
+describe('测试GithubServer类', () => {
   const token = process.env.TEST_TOKEN || '';
   const owner = 'uuuhdstest';
   const ownerOrg = 'xhhyyds';

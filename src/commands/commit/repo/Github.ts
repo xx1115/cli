@@ -1,29 +1,20 @@
-import simpleGit, { SimpleGit } from 'simple-git';
-import { doSpinner } from '@/utils/spinner';
 import axios, {
   AxiosInstance,
   AxiosRequestConfig,
   AxiosRequestHeaders,
 } from 'axios';
-import { emptyDirSync, ensureDirSync } from 'fs-extra';
-import glob from 'glob';
 import { Logger } from 'npmlog';
-import { join } from 'path';
-import { Repo, RepoUserProps } from '..';
-import { REPO_OWNER_USER } from '../..';
-import { copyFileSync, statSync } from 'fs';
+import { Git, Repo, RepoUserProps } from '.';
 
 export interface GithubServerProps {
   token: string;
 }
 
-export class GithubServer implements Repo {
+export class GithubServer extends Git implements Repo {
   client: AxiosInstance;
-  token: string;
-  log: Logger;
+
   constructor(token: string, log: Logger) {
-    this.log = log;
-    this.token = token;
+    super(token, log);
     this.client = axios.create({
       baseURL: 'https://api.github.com',
       timeout: 5000,
@@ -57,63 +48,6 @@ export class GithubServer implements Repo {
     }
   }
 
-  setToken(token: string) {
-    this.token = token;
-  }
-
-  async ensureRemoteRepo(owner: string, repoName: string, ownerType: string) {
-    let repo = await this.getRepo(owner, repoName);
-    if (!repo) {
-      await doSpinner('开始创建远程仓库...', async () => {
-        if (ownerType === REPO_OWNER_USER) {
-          repo = await this.createRepo(repoName);
-        } else {
-          repo = await this.createOrgRepo(repoName, owner);
-        }
-      });
-      if (repo) {
-        await this.createReadme(owner, repoName);
-        this.log.verbose('repo', String(repo));
-        this.log.success('远程仓库创建成功');
-      } else {
-        throw new Error('远程仓库创建失败');
-      }
-    } else {
-      this.log.success('远程仓库信息获取成功');
-    }
-  }
-
-  async cloneToLocal(tmpDir: string, owner: string, repoName: string) {
-    const git: SimpleGit = simpleGit(tmpDir);
-    return git.clone(this.getRemote(owner, repoName) as string, tmpDir);
-  }
-
-  moveFiles(from: string, to: string) {
-    ensureDirSync(to);
-    const files = glob.sync('**', {
-      cwd: from,
-      dot: true,
-      // nodir: true,
-      ignore: ['**/node_modules/**', '.git/**'],
-    });
-    files
-      .filter((file) => {
-        return statSync(join(from, file)).isDirectory();
-      })
-      .forEach((file) => {
-        const p = join(to, file);
-        ensureDirSync(p);
-      });
-    files
-      .filter((file) => {
-        return statSync(join(from, file)).isFile();
-      })
-      .forEach((file) => {
-        copyFileSync(join(from, file), join(to, file));
-      });
-    emptyDirSync(from);
-  }
-
   createReadme(owner: string, repoName: string) {
     return this.put(
       `/repos/${owner}/${repoName}/contents/README.md`,
@@ -122,7 +56,7 @@ export class GithubServer implements Repo {
         repo: repoName,
         path: 'README.md',
         message: 'doc: add README.md file',
-        content: '',
+        content: 'IA==',
       },
       {
         Accept: 'application/vnd.github.v3+json',
@@ -171,7 +105,7 @@ export class GithubServer implements Repo {
   }
 
   getRemote(owner: string, repo: string) {
-    return `https://github.com/${owner}/${repo}.git`;
+    return `git@github.com:${owner}/${repo}.git`;
   }
 
   getTokenHelpUrl() {
