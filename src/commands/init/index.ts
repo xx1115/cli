@@ -1,6 +1,5 @@
 import { Command } from '@/models';
 import { log } from '@/utils/log';
-import { Logger } from 'npmlog';
 
 interface InitCommandParam {
   force?: boolean;

@@ -4,7 +4,7 @@ on:
   push:
     branches: [main, develop/*.*.*]
   pull_request:
-    branches: [main]
+    branches: [main, develop/*.*.*]
 
 jobs:
   build:
@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm ci
-      - run: npm run test:cov
+      - run: TEST_TOKEN=${{ secrets.TEST_TOKEN }} npm run test:cov
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v2
         with:

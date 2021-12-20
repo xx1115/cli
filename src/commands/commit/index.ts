@@ -1,4 +1,4 @@
-import { GithubServer } from './repo/git/index';
+import { GithubServer } from './repo/Github';
 import os from 'os';
 import { existsSync } from 'fs';
 import { basename, join } from 'path';
@@ -14,7 +14,7 @@ import { v4 as uuidv4 } from 'uuid';
 import inquirer from 'inquirer';
 import simpleGit, { Options, SimpleGit, TaskOptions } from 'simple-git';
 import { Command } from '@/models';
-import { Repo } from './repo';
+import { GiteeServer, Repo } from './repo';
 import { asyncGenerator } from '@/utils/async';
 import { Logger } from 'npmlog';
 import { log } from '@/utils/log';
@@ -91,7 +91,7 @@ const VERSION_TYPES = (version: string) => {
 const VERSION_RELEASE = 'release';
 const VERSION_DEVELOP = 'develop';
 
-export class CommitCommand extends Command<CommitCommandParam> {
+export class CommitCommand extends Command<Partial<CommitCommandParam>> {
   branch = '';
   version = '';
   cwd: string;
@@ -105,8 +105,9 @@ export class CommitCommand extends Command<CommitCommandParam> {
   gitServer?: Repo;
   user?: GitUserProps;
   orgs: GitOrgProps[] = [];
+  remote = '';
 
-  constructor(props: CommitCommandParam, log: Logger) {
+  constructor(props: Partial<CommitCommandParam>, log: Logger) {
     super(props, log);
     this.version = '';
     this.cwd = process.cwd();
@@ -126,7 +127,23 @@ export class CommitCommand extends Command<CommitCommandParam> {
     this.log.verbose('prepare', '读取到项目配置信息为', this.RepoInfo);
     if (await this.needSetConfig()) {
       await this.configRepo();
+    } else {
+      const config = this.getRepoConfig();
+      if (config.server === RepoEnum.GITHUB) {
+        this.gitServer = new GithubServer(config.token, this.log);
+      } else if (config.server === RepoEnum.GITEE) {
+        this.gitServer = new GiteeServer(config.token, this.log);
+      } else {
+        throw new Error('Git Server还未实现');
+      }
     }
+    const config = this.getRepoConfig();
+    // 创建远端仓库
+    await this.gitServer?.ensureRemoteRepo(
+      config.belongTo,
+      this.repoName,
+      config.ownerType,
+    );
   }
 
   async configRepo() {
@@ -138,10 +155,8 @@ export class CommitCommand extends Command<CommitCommandParam> {
 
   async getUserAndOrg() {
     const config = this.getRepoConfig();
-    if (config.server === RepoEnum.GITHUB) {
+    if (config.server === RepoEnum.GITHUB || config.server === RepoEnum.GITEE) {
       this.gitServer?.setToken(config.token);
-    } else if (config.server === RepoEnum.GITEE) {
-      // TODO:
     } else {
       throw new Error('目前还不支持这种远程仓库');
     }
@@ -155,7 +170,7 @@ export class CommitCommand extends Command<CommitCommandParam> {
   }
 
   async configServer() {
-    const config = this.getRepoConfig();
+    let config = this.getRepoConfig();
     this.log.verbose('configServer', '读取到的项目配置信息为', config);
     if (this.argv.resetServer || !config.server) {
       const gitServer = (
@@ -182,8 +197,15 @@ export class CommitCommand extends Command<CommitCommandParam> {
         `${gitServer} => ${this.configPath}`,
       );
     }
-    // TODO: add GiteeServer
-    this.gitServer = new GithubServer('', this.log);
+    // TODO: 工厂模式？
+    config = this.getRepoConfig();
+    if (config.server === RepoEnum.GITHUB) {
+      this.gitServer = new GithubServer('', this.log);
+    } else if (config.server === RepoEnum.GITEE) {
+      this.gitServer = new GiteeServer('', this.log);
+    } else {
+      throw new Error('Git Server还未实现');
+    }
   }
 
   async configToken() {
@@ -206,7 +228,8 @@ export class CommitCommand extends Command<CommitCommandParam> {
         })
       ).token;
       this.updateRepoConfig(this.repoName, 'token', token);
-      this.log.success('token写入成功', `${token} -> ${this.configPath}`);
+      this.log.verbose('token写入成功', `${token} -> ${this.configPath}`);
+      this.gitServer?.setToken(token);
     }
   }
 
@@ -295,7 +318,7 @@ export class CommitCommand extends Command<CommitCommandParam> {
     this.RepoInfo = (await readJson(this.configPath)) as CommitConfig;
   }
 
-  private async ensurePkgVersion() {
+  async ensurePkgVersion() {
     if (existsSync(this.defaultCfg)) {
       this.version = (await readJsonSync(this.defaultCfg)).version;
     } else if (existsSync(this.secondCfg)) {
@@ -317,39 +340,48 @@ export class CommitCommand extends Command<CommitCommandParam> {
   }
 
   protected async init() {
-    const config = this.getRepoConfig();
-    // 创建远端仓库
-    await this.gitServer?.ensureRemoteRepo(
-      config.belongTo,
-      this.repoName,
-      config.ownerType,
-    );
-    if (!pathExistsSync(join(this.cwd, '.git'))) {
-      await this.git.init();
-    }
-    const remotes = await this.git.remote([]);
-    if (!remotes) {
-      const tmp = join(process.env.CLI_HOME_PATH as string, '.tmp', uuidv4());
-      this.log.verbose('init', 'move to tmp, path is', tmp);
-      await this.gitServer?.moveFiles(this.cwd, tmp);
-      this.log.verbose(
-        'clone',
-        `clone ${this.gitServer?.getRemote(
-          config.belongTo,
-          this.repoName,
-        )} to ${this.cwd}`,
-      );
-      await this.gitServer?.cloneToLocal(
-        this.git,
-        config.belongTo,
-        this.repoName,
-      );
-      log.success('clone', 'clone success!');
-      await this.gitServer?.moveFiles(tmp, this.cwd);
-      this.log.success('commit', 'finish');
+    if (await this.getRemote()) {
       return;
     }
+    await this.initAndAddRemote(this.remote);
+    await this.initCommit();
+    if (await this.checkRemoteMaster()) {
+      await this.pullRemoteRepo('main', {
+        '--allow-unrelated-histories': null,
+      });
+    } else {
+      await this.pushRemoteRepo('main');
+    }
     this.log.success('init', '本地已与远端建立关联');
+  }
+
+  async getRemote() {
+    const config = this.getRepoConfig();
+    this.remote = this.gitServer?.getRemote(
+      config.belongTo,
+      this.repoName,
+    ) as string;
+    if (pathExistsSync(join(this.cwd, '.git'))) {
+      this.log.success('getRemote', 'git已完成初始化');
+      return true;
+    }
+  }
+
+  async initAndAddRemote(remote: string) {
+    log.info('initAndAddRemote', '执行git初始化');
+    await this.git.init();
+    log.info('initAndAddRemote', '添加git remote');
+    const remotes = await this.git.getRemotes();
+    log.verbose('initAndAddRemote', 'git remotes', remotes);
+    if (!remotes.find((item) => item.name === 'origin')) {
+      await this.git.addRemote('origin', remote);
+    }
+  }
+
+  async checkRemoteMaster() {
+    return (
+      (await this.git.listRemote(['--refs'])).indexOf('refs/heads/main') >= 0
+    );
   }
 
   async pushMainRemote() {
@@ -360,7 +392,6 @@ export class CommitCommand extends Command<CommitCommandParam> {
   }
 
   async checkRemoteMain() {
-    // Do not show peeled tags or pseudorefs like HEAD in the output.
     return (
       (await this.git.listRemote(['--refs'])).indexOf('refs/heads/main') >= 0
     );
@@ -443,18 +474,16 @@ export class CommitCommand extends Command<CommitCommandParam> {
   }
 
   protected async exec() {
-    if (await this.whetherContinue()) {
-      await this.getCorrectVersion();
-      await this.checkStash();
-      await this.checkConflicted();
-      await this.checkoutBranch(this.branch);
-      await this.pullRemoteMainAndBranch();
-      if (!(await this.initCommit())) {
-        await this.pushRemoteRepo(this.branch);
-      }
-      if (this.argv.production) {
-        await this.addAndPushTag();
-      }
+    await this.getCorrectVersion();
+    await this.checkStash();
+    await this.checkConflicted();
+    await this.checkoutBranch(this.branch);
+    await this.pullRemoteMainAndBranch();
+    if (!(await this.initCommit())) {
+      await this.pushRemoteRepo(this.branch);
+    }
+    if (this.argv.production) {
+      await this.addAndPushTag();
     }
   }
 
@@ -468,34 +497,6 @@ export class CommitCommand extends Command<CommitCommandParam> {
     this.log.info('addAndPushTag', `向远端推送${tagName}成功`);
   }
 
-  async whetherContinue() {
-    const local = await this.git.branchLocal();
-    if (local.current.startsWith('develop')) {
-      this.log.info('whetherContinue', '您当前所在分支为', local.current);
-      return true;
-    }
-    this.log.info('whetherContinue', '您当前并不在develop分支上');
-    this.log.info(
-      'whetherContinue',
-      `如果您此次开发有n次提交，请执行n次${chalk.red(
-        'git rebase HEAD^',
-      )}将提交弹出到工作区`,
-    );
-    const ctu = (
-      await inquirer.prompt([
-        {
-          type: 'confirm',
-          name: 'ctu',
-          message: '如已完成或此次开发没有提交过，请输入Y',
-        },
-      ])
-    ).ctu;
-    if (ctu) {
-      this.log.info('exec', chalk.red('您选择了继续执行'));
-      return ctu;
-    }
-  }
-
   async pushRemoteRepo(branchName: string) {
     this.log.info('pushRemoteRepo', `推送代码至${branchName}分支`);
     await this.git.push('origin', branchName);
@@ -503,7 +504,10 @@ export class CommitCommand extends Command<CommitCommandParam> {
   }
 
   async pullRemoteMainAndBranch() {
-    this.log.info('pullRemoteMainAndBranch', `合并 [main] -> [${this.branch}]`);
+    this.log.info(
+      'pullRemoteMainAndBranch',
+      `开始合并 [main] -> [${this.branch}]`,
+    );
     await this.pullRemoteRepo('main');
     this.log.success('合并远程 [main] 分支代码成功');
     await this.checkConflicted();
@@ -524,9 +528,10 @@ export class CommitCommand extends Command<CommitCommandParam> {
 
   async pullRemoteRepo(branchName: string, options?: TaskOptions<Options>) {
     this.log.info('pullRemoteRepo', `同步远程${branchName}分支代码`);
-    await this.git.pull('origin', branchName, options).catch((err) => {
-      this.log.error('pullRemoteRepo', err.message);
-    });
+    await this.git.pull('origin', branchName, options);
+    // .catch((err) => {
+    // this.log.error('pullRemoteRepo', err.message);
+    // });
   }
 
   async checkoutBranch(branch: string) {
@@ -638,6 +643,6 @@ export const commitExec = async (...params: [CommitCommandParam, any[]]) => {
     await command.do();
   } catch (e) {
     log.error('commitExec', (e as Error).message);
-    console.log(e);
+    process.env.CONSOLE_ERROR && console.log(e);
   }
 };

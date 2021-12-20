@@ -1,18 +1,21 @@
 {
   "name": "@xx1115/cli",
-  "version": "0.0.1",
+  "version": "0.0.4",
   "scripts": {
     "start": "tsc --watch --project tsconfig-build.json",
     "test": "jest",
     "test:dev": "jest --watch",
     "test:cov": "jest --coverage",
+    "prestart": "npm run install:ext",
     "prepare": "husky install",
     "format": "prettier --write \"src/**/*.ts\"",
     "lint": "eslint \"src/**/*.ts\" --fix",
     "build:dev": "rimraf dist && tsc -p tsconfig-build.json",
     "dev:cli-init": "ts-node --files -r tsconfig-paths/register ./src/cli/index.ts --help",
     "dev:package": "cross-env NODE_ENV=test ts-node --files -r tsconfig-paths/register ./src/models/package/remote.ts",
-    "prepublish": "ts-node scripts/prepublish.ts && npm run build:dev"
+    "prepublish": "ts-node scripts/prepublish.ts && npm run build:dev",
+    "preinstall:ext": "ts-node scripts/pre-install-ext.ts",
+    "install:ext": "code --install-extension wayou.vscode-todo-highlight --install-extension esbenp.prettier-vscode --install-extension dbaeumer.vscode-eslint"
   },
   "bin": {
     "xx": "./dist/bin/index.js"
@@ -64,9 +67,11 @@
     "glob": "^7.2.0",
     "import-local": "^3.0.3",
     "inquirer": "^8.2.0",
+    "js-base64": "^3.7.2",
     "module-alias": "^2.2.2",
     "npmlog": "^6.0.0",
     "pacote": "^12.0.2",
+    "parse-git-config": "^3.0.0",
     "rimraf": "^3.0.2",
     "root-check": "^1.0.0",
     "semver": "^7.3.5",
