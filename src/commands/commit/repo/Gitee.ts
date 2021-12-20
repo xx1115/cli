@@ -35,18 +35,6 @@ export class GiteeServer extends Git {
     });
   }
 
-  createReadme(owner: string, repo: string) {
-    // return this.post(`/repos/${owner}/${repo}/contents/README.md`, {
-    //   access_token: this.token,
-    //   owner,
-    //   repo,
-    //   path: 'README.md',
-    //   message: 'doc: add README.md file',
-    //   content: 'IA==',
-    // });
-    return Promise.resolve();
-  }
-
   createRepo(name: string) {
     return this.post('/user/repos', { name, access_token: this.token });
   }

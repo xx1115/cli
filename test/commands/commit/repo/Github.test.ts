@@ -1,15 +1,6 @@
-import {
-  createFileSync,
-  emptyDirSync,
-  ensureDirSync,
-  pathExistsSync,
-} from 'fs-extra';
 import { REPO_OWNER_USER } from '@/commands';
 import { GithubServer } from '@/commands/commit/repo/Github';
 import { log } from '@/utils/log';
-import os from 'os';
-import { join } from 'path';
-import { rmSync } from 'fs';
 
 jest.useFakeTimers('legacy');
 
@@ -53,7 +44,7 @@ describe('测试GithubServer类', () => {
   it('getRemote', () => {
     const server = new GithubServer(token, log);
     const remoteAddr = server.getRemote('uuuhdstest', 't1');
-    expect(remoteAddr).toBe('https://github.com/uuuhdstest/t1.git');
+    expect(remoteAddr).toBe('git@github.com:uuuhdstest/t1.git');
   });
 
   it(
@@ -79,37 +70,6 @@ describe('测试GithubServer类', () => {
     const git = new GithubServer('', log);
     git.setToken(token);
     expect(token).toBe(git.token);
-  });
-
-  it('cloneToLocal', async () => {
-    const server = new GithubServer(token, log);
-    const tmpDir = join(os.homedir(), '.tmp', '.t1');
-    ensureDirSync(tmpDir);
-    if (pathExistsSync(tmpDir)) {
-      emptyDirSync(tmpDir);
-    }
-    await server.cloneToLocal(tmpDir, owner, 't1');
-    expect(pathExistsSync(join(tmpDir, 'README.md'))).toBeTruthy();
-  });
-
-  it('moveFiles', () => {
-    const server = new GithubServer(token, log);
-    const tmp = join(os.homedir(), '.tmp', '.cp');
-    const tmp2 = join(os.homedir(), '.tmp', '.cp2');
-    const f1 = 'README.md';
-    const f2 = '.gitignore';
-    const f3 = 'node_modules';
-    ensureDirSync(tmp);
-    createFileSync(join(tmp, f1));
-    createFileSync(join(tmp, f2));
-    ensureDirSync(join(tmp, f3));
-    server.moveFiles(tmp, tmp2);
-    expect(pathExistsSync(join(tmp2, f1))).toBeTruthy();
-    expect(pathExistsSync(join(tmp2, f2))).toBeTruthy();
-    expect(pathExistsSync(join(tmp2, f3))).toBeFalsy();
-    // clean
-    rmSync(tmp, { recursive: true, force: true });
-    rmSync(tmp2, { recursive: true, force: true });
   });
 
   it(

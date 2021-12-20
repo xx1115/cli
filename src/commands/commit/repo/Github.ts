@@ -4,14 +4,10 @@ import axios, {
   AxiosRequestHeaders,
 } from 'axios';
 import { Logger } from 'npmlog';
-import { Git, Repo, RepoUserProps } from '.';
+import { Git, RepoUserProps } from './Git';
 
-export interface GithubServerProps {
-  token: string;
-}
-
-export class GithubServer extends Git implements Repo {
-  client: AxiosInstance;
+export class GithubServer extends Git {
+  private client: AxiosInstance;
 
   constructor(token: string, log: Logger) {
     super(token, log);

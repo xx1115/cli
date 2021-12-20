@@ -14,7 +14,7 @@ export default {
     '<rootDir>/node_modules/(?!execa)',
   ],
   moduleFileExtensions: ['js', 'json', 'ts'],
-  testRegex: '\\.*\\.test\\.ts$',
+  testRegex: '.*\\.test\\.ts$',
   // transform: {
   //   '^.+\\.(t|j)s$': 'ts-jest',
   // },
